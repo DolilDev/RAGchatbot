@@ -1,76 +1,106 @@
-# [DocChat – RAG Chatbot](https://dolildev.github.io/RAGchatbot/)
+# DocChat — RAG Chatbot
 
-A browser-based RAG (Retrieval-Augmented Generation) chatbot that lets you chat with PDF documents using your choice of AI provider — no backend required.
+**Rozmawiaj z własnymi dokumentami PDF** używając modeli AI od Anthropic, Google lub OpenAI.  
+Działa w przeglądarce — bez backendu, bez instalacji.
 
-## Features
+🌐 **[Otwórz aplikację](https://dolildev.github.io/RAGchatbot/)**
 
-- **Multi-provider support** — Anthropic Claude, Google Gemini, OpenAI GPT
-- **PDF ingestion** — drag & drop or file picker, processes multiple files
-- **TF-IDF retrieval** — cosine similarity search over document chunks
-- **Source citations** — every answer shows which document fragments were used
-- **Session-only key storage** — API keys are kept in `sessionStorage`, never sent anywhere except the provider's API
-- **Single file** — the entire app is one `index.html`, no build step needed
+---
 
-## Supported Models
+## Jak to działa
 
-| Provider | Models |
+```
+Wgraj PDF  →  Ekstrakcja tekstu (pdf.js)  →  Podział na fragmenty
+                                                       ↓
+                                            Indeks TF-IDF w pamięci
+                                                       ↓
+Zadaj pytanie  →  Top-8 fragmentów (podobieństwo cosinusowe + keyword bonus)
+                                                       ↓
+                              Fragmenty + pytanie → model AI → odpowiedź
+                                                       ↓
+                              Odpowiedź z odnośnikami do stron PDF
+```
+
+---
+
+## Funkcje
+
+- **Multi-provider** — Anthropic Claude, Google Gemini, OpenAI GPT
+- **Drag & drop** — przeciągnij jeden lub wiele plików PDF
+- **Cytowane źródła** — każda odpowiedź pokazuje fragmenty z których korzystał model
+- **Podgląd PDF** — kliknij źródło, żeby otworzyć PDF na właściwej stronie z podświetlonym tekstem
+- **Ciemny motyw** — przełącznik w nagłówku, zapisywany w localStorage
+- **Klucze API tylko w sesji** — przechowywane w `sessionStorage`, nigdy nie opuszczają przeglądarki
+
+---
+
+## Obsługiwane modele
+
+| Provider | Modele |
 |---|---|
-| Anthropic | Claude Sonnet 4, Claude Opus 4.7, Claude Haiku 4.5 |
-| Google | Gemini 2.0 Flash, Gemini 1.5 Flash, Gemini 1.5 Pro |
-| OpenAI | GPT-4o, GPT-4o mini, GPT-3.5 Turbo |
+| **Anthropic** | Claude Sonnet 4, Claude Opus 4.7, Claude Haiku 4.5 |
+| **Google** | Gemini 2.5 Flash, Gemini 2.5 Pro, Gemini 3.5 Flash, Gemini 3.1 Flash Lite |
+| **OpenAI** | GPT-4o, GPT-4o mini, GPT-3.5 Turbo |
 
-## Getting Started
+---
 
-1. Open `index.html` in any modern browser (Chrome, Firefox, Edge)
-2. Select a provider and model from the dropdowns
-3. Paste your API key and click **Zapisz klucz**
-4. Upload one or more PDF files
-5. Ask questions in the chat input
+## Szybki start
 
-No installation, no server, no dependencies to install.
+1. Otwórz **[dolildev.github.io/RAGchatbot](https://dolildev.github.io/RAGchatbot/)**
+2. Wybierz providera i model
+3. Wklej klucz API → **Zapisz klucz**
+4. Wgraj pliki PDF
+5. Zadaj pytanie
 
-## How It Works
+### Klucze API
 
-```
-PDF upload → text extraction (pdf.js) → chunking (500 tokens, 50 overlap)
-                                              ↓
-                                    TF-IDF index built in memory
-                                              ↓
-User query → top-5 chunks retrieved (cosine similarity)
-                                              ↓
-                              Context + query sent to AI provider API
-                                              ↓
-                                    Answer displayed with sources
-```
+| Provider | Format klucza | Gdzie zdobyć |
+|---|---|---|
+| Anthropic | `sk-ant-...` | [console.anthropic.com](https://console.anthropic.com) |
+| Google | `AIzaSy...` | [aistudio.google.com](https://aistudio.google.com) |
+| OpenAI | `sk-...` | [platform.openai.com](https://platform.openai.com) |
 
-## API Key Requirements
+> **Uwaga:** OpenAI blokuje żądania z przeglądarki (CORS). Działa lokalnie przez serwer proxy lub bezpośrednio tylko z Anthropic i Google.
 
-- **Anthropic** — key starting with `sk-ant-`
-- **Google Gemini** — key starting with `AIza`
-- **OpenAI** — key starting with `sk-`
+---
 
-Keys are stored only in `sessionStorage` and cleared when the browser tab is closed.
+## Uruchomienie lokalnie
 
-## Running Locally
-
-No server needed for Anthropic and Google Gemini. OpenAI requires a server or a CORS-enabled proxy due to browser restrictions.
+Żaden build nie jest wymagany — wystarczy serwer plików statycznych:
 
 ```bash
-# Simplest option — just open the file
-open index.html
-
-# Or serve with any static file server
-npx serve .
+# Python
 python -m http.server 8080
+
+# Node.js
+npx serve .
 ```
 
-## Tech Stack
+Następnie otwórz `http://localhost:8080`.
 
-- Vanilla JavaScript (ES2020)
-- [pdf.js](https://mozilla.github.io/pdf.js/) for PDF parsing
-- TF-IDF + cosine similarity for retrieval (implemented from scratch)
-- Direct fetch to provider REST APIs
+---
 
-## License
+## Struktura projektu
+
+```
+RAGchatbot/
+├── index.html   — szkielet HTML
+├── style.css    — style i zmienne CSS (dark mode)
+├── app.js       — logika RAG, API, podgląd PDF
+└── .nojekyll    — wyłącza Jekyll na GitHub Pages
+```
+
+---
+
+## Stack technologiczny
+
+- **Vanilla JS** (ES2020) — zero frameworków, zero zależności npm
+- **[pdf.js](https://mozilla.github.io/pdf.js/)** — ekstrakcja tekstu i podgląd PDF
+- **TF-IDF + cosine similarity** — wyszukiwanie fragmentów (własna implementacja)
+- **GitHub Pages** — hosting
+
+---
+
+## Licencja
 
 MIT
