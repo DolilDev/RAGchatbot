@@ -46,14 +46,14 @@ const CHUNK_OVER = 80;
 const TOP_K      = 8;
 
 const SYSTEM_PROMPT =
-    'Jesteś asystentem do analizy dokumentów. Działasz jak wyszukiwarka — wydobywasz informacje z tekstu, nie tworzysz ich.\n\n' +
-    'BEZWZGLĘDNE ZASADY:\n' +
-    '- Odpowiadasz TYLKO na podstawie fragmentów podanych poniżej w sekcji KONTEKST.\n' +
-    '- ZAKAZ używania jakiejkolwiek wiedzy spoza dostarczonego kontekstu.\n' +
-    '- Jeśli odpowiedź nie wynika z kontekstu — napisz: "Nie znalazłem tej informacji w dostarczonych dokumentach." Jeśli jest częściowa — podaj co jest i zaznacz że reszty brak.\n' +
-    '- Nie domyślaj się ani nie uzupełniaj wiedzy spoza kontekstu.\n' +
-    '- Cytuj dosłownie kluczowe fragmenty używając cudzysłowów.\n' +
-    '- Podawaj konkretne liczby, daty i nazwy dokładnie tak jak są w tekście.';
+    'You are a document analysis assistant. You work like a search engine — you extract information from text, you do not create it.\n\n' +
+    'STRICT RULES:\n' +
+    '- Answer ONLY based on the fragments provided below in the CONTEXT section.\n' +
+    '- You are FORBIDDEN from using any knowledge outside the provided context.\n' +
+    '- If the answer does not follow from the context — write exactly: "I could not find this information in the provided documents." If there is a partial answer — provide what is there and note what is missing.\n' +
+    '- Do not guess or supplement with knowledge from outside the context.\n' +
+    '- Quote key fragments verbatim using quotation marks.\n' +
+    '- Provide specific numbers, dates, and names exactly as they appear in the text.';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -108,13 +108,13 @@ function saveKey() {
     const cfg = PROVIDERS[id];
     const v   = document.getElementById('keyInput').value.trim();
 
-    if (!v) return toast('Wprowadź klucz API', 'error');
+    if (!v) return toast('Enter your API key', 'error');
     if (!v.startsWith(cfg.prefix))
-        return toast(`Klucz ${cfg.label} powinien zaczynać się od "${cfg.prefix}"`, 'error');
+        return toast(`${cfg.label} key must start with "${cfg.prefix}"`, 'error');
 
     sessionStorage.setItem(`ak_${id}`, v);
     refreshKeyDot();
-    toast(`Klucz ${cfg.label} zapisany`, 'success');
+    toast(`${cfg.label} key saved`, 'success');
 }
 
 function getKey() { return sessionStorage.getItem(`ak_${currentProvider()}`) || ''; }
@@ -147,7 +147,7 @@ function toggleKey() {
 async function handleFiles(files) {
     const pdfs = Array.from(files).filter(f =>
         f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-    if (!pdfs.length) return toast('Wybierz pliki PDF', 'error');
+    if (!pdfs.length) return toast('Please select PDF files', 'error');
 
     showProgress(true);
 
@@ -158,25 +158,25 @@ async function handleFiles(files) {
             const pages = await extractPdf(file, (pg, tot) => {
                 const base = (i / pdfs.length) * 100;
                 const inc  = (pg / tot) * (100 / pdfs.length);
-                setProgress(`${file.name}  (str. ${pg}/${tot})`, base + inc);
+                setProgress(`${file.name}  (p. ${pg}/${tot})`, base + inc);
             });
             const nc = splitChunks(pages, file.name, chunks.length);
             chunks.push(...nc);
             fileStore[file.name] = file;
             addFileRow(file.name, nc.length);
         } catch (e) {
-            toast(`Błąd: ${file.name} – ${e.message}`, 'error');
+            toast(`Error: ${file.name} – ${e.message}`, 'error');
         }
     }
 
-    setProgress('Gotowe', 100);
+    setProgress('Done', 100);
     setTimeout(() => showProgress(false), 700);
     document.getElementById('fileInput').value = '';
 
     if (chunks.length > 0) {
         tfidf = buildTFIDF(chunks.map(c => c.text));
         setInputEnabled(true);
-        toast(`Załadowano łącznie ${chunks.length} fragmentów`, 'success');
+        toast(`Loaded ${chunks.length} chunks total`, 'success');
     }
 }
 
@@ -298,7 +298,7 @@ async function callAPI(messages, systemPrompt) {
     if (provider === 'anthropic') return callAnthropic(messages, systemPrompt, model, key);
     if (provider === 'google')    return callGemini(messages, systemPrompt, model, key);
     if (provider === 'openai')    return callOpenAI(messages, systemPrompt, model, key);
-    throw new Error('Nieznany provider');
+    throw new Error('Unknown provider');
 }
 
 async function callAnthropic(messages, systemPrompt, model, key) {
@@ -344,7 +344,7 @@ async function callGemini(messages, systemPrompt, model, key) {
     }
     const d = await r.json();
     const text = d?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Pusta odpowiedź od Gemini');
+    if (!text) throw new Error('Empty response from Gemini');
     return text;
 }
 
@@ -367,7 +367,7 @@ async function callOpenAI(messages, systemPrompt, model, key) {
     }
     const d = await r.json();
     const text = d?.choices?.[0]?.message?.content;
-    if (!text) throw new Error('Pusta odpowiedź od OpenAI');
+    if (!text) throw new Error('Empty response from OpenAI');
     return text;
 }
 
@@ -380,8 +380,8 @@ async function sendMessage() {
     const query = inp.value.trim();
     if (!query) return;
 
-    if (!getKey())      return toast('Zapisz klucz API przed wysłaniem', 'error');
-    if (!chunks.length) return toast('Wgraj dokumenty PDF', 'error');
+    if (!getKey())      return toast('Save your API key before sending', 'error');
+    if (!chunks.length) return toast('Upload PDF documents first', 'error');
 
     inp.value = '';
     autoResize(inp);
@@ -392,13 +392,13 @@ async function sendMessage() {
 
     const relevant  = retrieve(query, TOP_K);
     const ctxBlock  = relevant.length
-        ? relevant.map((c, i) => `[Fragment ${i+1} | Źródło: ${c.source}]\n${c.text}`).join('\n\n---\n\n')
-        : 'Brak pasujących fragmentów w dokumentach.';
-    const sysPrompt = `${SYSTEM_PROMPT}\n\n=== KONTEKST Z DOKUMENTÓW ===\n\n${ctxBlock}\n\n=== KONIEC KONTEKSTU ===`;
+        ? relevant.map((c, i) => `[Fragment ${i+1} | Source: ${c.source}]\n${c.text}`).join('\n\n---\n\n')
+        : 'No matching fragments found in documents.';
+    const sysPrompt = `${SYSTEM_PROMPT}\n\n=== DOCUMENT CONTEXT ===\n\n${ctxBlock}\n\n=== END OF CONTEXT ===`;
     const estTok    = Math.ceil(sysPrompt.length / 4);
 
     document.getElementById('tokenCounter').textContent =
-        `Kontekst: ~${estTok.toLocaleString()} est. tokenów`;
+        `Context: ~${estTok.toLocaleString()} est. tokens`;
 
     try {
         const text = await callAPI(chatHistory, sysPrompt);
@@ -422,7 +422,7 @@ function addMsg(role, text, sources = []) {
 
     const row    = el('div', `msg-row ${role}`);
     const avatar = el('div', 'msg-avatar');
-    avatar.textContent = role === 'user' ? 'Ty' : 'AI';
+    avatar.textContent = role === 'user' ? 'You' : 'AI';
 
     const content = el('div', 'msg-content');
     const bubble  = el('div', 'msg-bubble');
@@ -433,7 +433,7 @@ function addMsg(role, text, sources = []) {
         const details = document.createElement('details');
         details.className = 'sources';
         const summary = document.createElement('summary');
-        summary.textContent = ` Źródła (${sources.length} fragmentów)`;
+        summary.textContent = ` Sources (${sources.length} fragments)`;
         details.appendChild(summary);
         sources.forEach((s, i) => {
             const item = el('div', 'source-item');
@@ -442,8 +442,8 @@ function addMsg(role, text, sources = []) {
             if (s.page) {
                 const btn = document.createElement('button');
                 btn.className   = 'page-link';
-                btn.textContent = `str. ${s.page} ↗`;
-                btn.title       = `Otwórz PDF na stronie ${s.page}`;
+                btn.textContent = `p. ${s.page} ↗`;
+                btn.title       = `Open PDF at page ${s.page}`;
                 btn.onclick = e => { e.stopPropagation(); openPreviewAtPage(s.source, s.page, s.text); };
                 meta.appendChild(btn);
             }
@@ -468,7 +468,7 @@ function addErrorMsg(errText) {
     av.textContent = '!';
     const cnt = el('div', 'msg-content');
     const bub = el('div', 'msg-bubble error-bubble');
-    bub.textContent = `Błąd API: ${errText}`;
+    bub.textContent = `API Error: ${errText}`;
     cnt.appendChild(bub);
     row.append(av, cnt);
     c.appendChild(row);
@@ -480,7 +480,7 @@ function addFileRow(name, count) {
     const empty = document.getElementById('fileEmpty');
     if (empty) empty.remove();
     const item = el('div', 'file-item');
-    item.title  = 'Kliknij, aby podejrzeć PDF';
+    item.title  = 'Click to preview PDF';
     item.onclick = () => openPreview(name);
     item.innerHTML =
         `<svg class="file-pdf-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">` +
@@ -488,18 +488,18 @@ function addFileRow(name, count) {
         `<polyline points="14 2 14 8 20 8"/></svg>` +
         `<div class="file-info">` +
         `<div class="file-name" title="${esc(name)}">${esc(name)}</div>` +
-        `<div class="file-meta">${count} fragmentów · kliknij, aby podejrzeć</div></div>`;
+        `<div class="file-meta">${count} chunks · click to preview</div></div>`;
     list.appendChild(item);
 }
 
 function clearDocs() {
-    if (!chunks.length) return toast('Brak dokumentów', 'info');
+    if (!chunks.length) return toast('No documents to clear', 'info');
     chunks = []; tfidf = null; fileStore = {};
     document.getElementById('fileList').innerHTML =
-        '<div class="file-empty" id="fileEmpty">Brak wgranych dokumentów</div>';
+        '<div class="file-empty" id="fileEmpty">No documents uploaded</div>';
     setInputEnabled(false);
-    document.getElementById('tokenCounter').textContent = 'Kontekst: 0 est. tokenów';
-    toast('Dokumenty wyczyszczone', 'info');
+    document.getElementById('tokenCounter').textContent = 'Context: 0 est. tokens';
+    toast('Documents cleared', 'info');
 }
 
 function setBusy(state) {
@@ -507,7 +507,7 @@ function setBusy(state) {
     const btn = document.getElementById('sendBtn');
     const inp = document.getElementById('chatInput');
     if (state) {
-        btn.innerHTML = '<div class="spinner"></div> Generowanie…';
+        btn.innerHTML = '<div class="spinner"></div> Generating…';
         btn.disabled  = true; inp.disabled = true;
         const c   = document.getElementById('chatMessages');
         const row = el('div', 'msg-row assistant'); row.id = 'typing';
@@ -522,7 +522,7 @@ function setBusy(state) {
         btn.innerHTML =
             '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">' +
             '<line x1="22" y1="2" x2="11" y2="13"/>' +
-            '<polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Wyślij';
+            '<polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send';
         btn.disabled = !chunks.length; inp.disabled = !chunks.length;
         const t = document.getElementById('typing'); if (t) t.remove();
     }
@@ -578,7 +578,7 @@ function setTheme(theme) {
 // ════════════════════════════════════════════
 async function openPreview(name, startPage = 1, chunkText = null) {
     const file = fileStore[name];
-    if (!file) return toast('Plik niedostępny', 'error');
+    if (!file) return toast('File not available', 'error');
 
     previewSourceChunk = chunkText;
     document.getElementById('previewTitle').textContent = name;
@@ -586,7 +586,7 @@ async function openPreview(name, startPage = 1, chunkText = null) {
     document.body.style.overflow = 'hidden';
 
     const body = document.getElementById('modalBody');
-    body.innerHTML = '<div class="modal-spinner"><div class="spinner"></div> Ładowanie…</div>';
+    body.innerHTML = '<div class="modal-spinner"><div class="spinner"></div> Loading…</div>';
 
     try {
         const buf = await file.arrayBuffer();
@@ -595,7 +595,7 @@ async function openPreview(name, startPage = 1, chunkText = null) {
         previewPage   = Math.min(Math.max(startPage, 1), previewTotal);
         await renderPreviewPage(previewPage);
     } catch (e) {
-        body.innerHTML = `<div class="modal-spinner" style="color:#f87171">Błąd: ${e.message}</div>`;
+        body.innerHTML = `<div class="modal-spinner" style="color:#f87171">Error: ${e.message}</div>`;
     }
 }
 
@@ -611,7 +611,7 @@ async function openPreviewAtPage(name, page, chunkText = null) {
 
 async function renderPreviewPage(n) {
     const body = document.getElementById('modalBody');
-    body.innerHTML = '<div class="modal-spinner"><div class="spinner"></div> Renderowanie…</div>';
+    body.innerHTML = '<div class="modal-spinner"><div class="spinner"></div> Rendering…</div>';
 
     const page     = await previewPdfDoc.getPage(n);
     const viewport = page.getViewport({ scale: 1 });
@@ -650,7 +650,7 @@ async function renderPreviewPage(n) {
     if (previewSourceChunk) {
         const panel = el('div', 'source-panel');
         const lbl   = el('div', 'source-panel-label');
-        lbl.textContent = 'Znaleziony fragment';
+        lbl.textContent = 'Retrieved fragment';
         const txt = el('div', 'source-panel-text');
         txt.textContent = previewSourceChunk;
         panel.append(lbl, txt);
