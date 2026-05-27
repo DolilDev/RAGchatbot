@@ -278,8 +278,15 @@
             border-radius: 7px; border: 1px solid var(--border);
             border-left: 3px solid var(--primary); background: var(--bg);
         }
-        .source-meta { font-size: 0.68rem; font-weight: 600; color: var(--primary); margin-bottom: 0.2rem; }
-        .source-text { font-size: 0.73rem; color: var(--text-muted); font-style: italic; line-height: 1.4; }
+        .source-meta { font-size: 0.68rem; font-weight: 600; color: var(--primary); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+        .source-text { font-size: 0.73rem; color: var(--text-muted); font-style: italic; line-height: 1.5; max-height: 90px; overflow-y: auto; }
+        .page-link {
+            background: none; border: 1px solid var(--primary); color: var(--primary);
+            border-radius: 4px; padding: 0.05rem 0.4rem; cursor: pointer;
+            font-size: 0.65rem; font-weight: 700; font-style: normal;
+            transition: background 0.15s, color 0.15s; white-space: nowrap;
+        }
+        .page-link:hover { background: var(--primary); color: #fff; }
 
         .typing-dots { display: flex; gap: 4px; align-items: center; padding: 0.4rem 0.1rem; }
         .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: #94a3b8; animation: pulse-dot 1.4s infinite; }
@@ -590,15 +597,18 @@ const PROVIDERS = {
     }
 };
 
-const MAX_TOKENS  = 1024;
-const CHUNK_SIZE  = 500;
-const CHUNK_OVER  = 50;
-const TOP_K       = 5;
+const MAX_TOKENS  = 2048;
+const CHUNK_SIZE  = 600;
+const CHUNK_OVER  = 80;
+const TOP_K       = 6;
 
 const SYSTEM_PROMPT =
-    'Jesteś pomocnym asystentem. Odpowiadaj WYŁĄCZNIE na podstawie poniższego kontekstu z dokumentów. ' +
-    'Jeśli odpowiedź nie znajduje się w kontekście, napisz wprost że nie znalazłeś tej informacji ' +
-    'w dostarczonych dokumentach. Cytuj konkretne fragmenty używając cudzysłowów.';
+    'Jesteś precyzyjnym asystentem analizującym dokumenty. Obowiązują Cię ŚCISŁE zasady:\n' +
+    '1. Odpowiadaj WYŁĄCZNIE na podstawie podanego kontekstu — nie uzupełniaj wiedzy z zewnątrz.\n' +
+    '2. Podawaj KONKRETNE fakty: liczby, daty, nazwy własne, definicje — dokładnie tak jak są w tekście.\n' +
+    '3. Cytuj kluczowe zdania lub wyrażenia dosłownie w cudzysłowach.\n' +
+    '4. Jeśli w kontekście jest częściowa odpowiedź, podaj ją i zaznacz co jest niejasne.\n' +
+    '5. Jeśli informacji nie ma w kontekście, napisz dokładnie: "Nie znalazłem tej informacji w dostarczonych dokumentach."';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -731,33 +741,47 @@ async function handleFiles(files) {
 }
 
 async function extractPdf(file, onProgress) {
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const buf   = await file.arrayBuffer();
+    const pdf   = await pdfjsLib.getDocument({ data: buf }).promise;
     const total = pdf.numPages;
-    let out = '';
+    const pages = [];
     for (let p = 1; p <= total; p++) {
         const page    = await pdf.getPage(p);
         const content = await page.getTextContent();
-        out += content.items.map(it => it.str).join(' ') + '\n';
+        const text    = content.items.map(it => it.str).join(' ');
+        pages.push({ page: p, text });
         onProgress(p, total);
     }
-    return out;
+    return pages;
 }
 
-function splitChunks(text, source, startIdx) {
-    text = text.replace(/\s+/g, ' ').trim();
+function splitChunks(pages, source, startIdx) {
+    // Build flat text while tracking page boundaries
+    let fullText = '';
+    const pageMap = [];
+    for (const { page, text } of pages) {
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        if (!cleaned) continue;
+        const start = fullText.length;
+        fullText += cleaned + ' ';
+        for (let i = start; i < fullText.length; i++) pageMap[i] = page;
+    }
+
     const result = [];
     let pos = 0, idx = startIdx;
-    while (pos < text.length) {
+    while (pos < fullText.length) {
         let end = pos + CHUNK_SIZE;
-        if (end < text.length) {
-            const sp = text.lastIndexOf(' ', end);
+        if (end < fullText.length) {
+            const sp = fullText.lastIndexOf(' ', end);
             if (sp > pos + CHUNK_SIZE * 0.5) end = sp;
         }
-        const chunk = text.slice(pos, Math.min(end, text.length)).trim();
-        if (chunk.length > 30) result.push({ text: chunk, source, idx: idx++ });
+        end = Math.min(end, fullText.length);
+        const chunk = fullText.slice(pos, end).trim();
+        if (chunk.length > 30) {
+            result.push({ text: chunk, source, idx: idx++, page: pageMap[pos] || 1 });
+        }
         pos = pos + (CHUNK_SIZE - CHUNK_OVER);
-        if (pos >= text.length) break;
+        if (pos >= fullText.length) break;
     }
     return result;
 }
@@ -973,9 +997,17 @@ function addMsg(role, text, sources = []) {
         sources.forEach((s, i) => {
             const item = el('div', 'source-item');
             const meta = el('div', 'source-meta');
-            meta.textContent = `Fragment ${i+1}  ·  ${s.source}`;
+            meta.textContent = `Fragment ${i+1} · ${s.source}`;
+            if (s.page) {
+                const btn = document.createElement('button');
+                btn.className = 'page-link';
+                btn.textContent = `str. ${s.page} ↗`;
+                btn.title = `Otwórz PDF na stronie ${s.page}`;
+                btn.onclick = e => { e.stopPropagation(); openPreviewAtPage(s.source, s.page); };
+                meta.appendChild(btn);
+            }
             const snip = el('div', 'source-text');
-            snip.textContent = `"${s.text.slice(0, 100)}…"`;
+            snip.textContent = s.text.length > 300 ? s.text.slice(0, 300) + '…' : s.text;
             item.append(meta, snip);
             details.appendChild(item);
         });
@@ -1103,7 +1135,7 @@ function setTheme(theme) {
 // ════════════════════════════════════════════
 // PDF PREVIEW
 // ════════════════════════════════════════════
-async function openPreview(name) {
+async function openPreview(name, startPage = 1) {
     const file = fileStore[name];
     if (!file) return toast('Plik niedostępny', 'error');
 
@@ -1118,10 +1150,19 @@ async function openPreview(name) {
         const buf  = await file.arrayBuffer();
         previewPdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
         previewTotal  = previewPdfDoc.numPages;
-        previewPage   = 1;
+        previewPage   = Math.min(Math.max(startPage, 1), previewTotal);
         await renderPreviewPage(previewPage);
     } catch (e) {
         body.innerHTML = `<div class="modal-spinner" style="color:#f87171">Błąd: ${e.message}</div>`;
+    }
+}
+
+async function openPreviewAtPage(name, page) {
+    if (previewPdfDoc && document.getElementById('previewTitle').textContent === name) {
+        previewPage = Math.min(Math.max(page, 1), previewTotal);
+        await renderPreviewPage(previewPage);
+    } else {
+        await openPreview(name, page);
     }
 }
 
