@@ -22,6 +22,17 @@
             --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
         }
 
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --border: #334155;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --primary-light: #1e1b4b;
+            --shadow: 0 1px 3px rgba(0,0,0,0.4);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+        }
+
         html, body { height: 100%; }
 
         body {
@@ -194,7 +205,9 @@
             padding: 0.5rem 0.65rem; border-radius: 8px;
             background: var(--bg); border: 1px solid var(--border);
             margin-bottom: 0.4rem;
+            cursor: pointer; transition: border-color 0.2s, background 0.2s;
         }
+        .file-item:hover { border-color: var(--primary); background: var(--primary-light); }
         .file-pdf-icon { color: #f43f5e; flex-shrink: 0; margin-top: 1px; }
         .file-info { min-width: 0; flex: 1; }
         .file-name { font-size: 0.78rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -333,6 +346,68 @@
             to   { transform: translateX(0);    opacity: 1; }
         }
 
+        /* ── Theme toggle ── */
+        .theme-btn {
+            background: none; border: none; cursor: pointer;
+            color: var(--text-muted); padding: 0.3rem; border-radius: 8px;
+            display: flex; align-items: center; flex-shrink: 0;
+            transition: color 0.2s, background 0.2s;
+        }
+        .theme-btn:hover { color: var(--primary); background: var(--primary-light); }
+
+        /* ── PDF Preview modal ── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+            z-index: 200; display: flex; align-items: center; justify-content: center;
+            padding: 1rem; backdrop-filter: blur(3px);
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-box {
+            background: var(--surface); border-radius: 14px;
+            width: min(820px, 100%); max-height: 90vh;
+            display: flex; flex-direction: column;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.4); overflow: hidden;
+        }
+        .modal-header {
+            display: flex; align-items: center; gap: 0.7rem;
+            padding: 0.7rem 1rem; border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .modal-title {
+            font-weight: 600; font-size: 0.85rem; flex: 1; min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .modal-nav { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+        .modal-nav button {
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: 6px; padding: 0.2rem 0.6rem; cursor: pointer;
+            font-size: 1rem; line-height: 1; color: var(--text); transition: border-color 0.2s;
+        }
+        .modal-nav button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+        .modal-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .modal-page-info { font-size: 0.75rem; color: var(--text-muted); min-width: 52px; text-align: center; }
+        .modal-close {
+            background: none; border: none; cursor: pointer; color: var(--text-muted);
+            font-size: 1rem; padding: 0.25rem 0.5rem; border-radius: 6px;
+            transition: color 0.2s, background 0.2s; flex-shrink: 0;
+        }
+        .modal-close:hover { color: var(--danger); background: #fee2e2; }
+        .modal-body {
+            flex: 1; overflow-y: auto; background: #3a3a3a;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 1.2rem; gap: 0.8rem;
+        }
+        .modal-canvas-wrap { position: relative; }
+        .modal-canvas-wrap canvas {
+            display: block; max-width: 100%; border-radius: 3px;
+            box-shadow: 0 2px 14px rgba(0,0,0,0.5);
+        }
+        .modal-spinner {
+            color: #bbb; font-size: 0.82rem; padding: 3rem 0;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .modal-spinner .spinner { border-color: rgba(255,255,255,0.25); border-top-color: #fff; }
+
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -352,6 +427,12 @@
 <!-- ════════════════ HEADER ════════════════ -->
 <header>
     <div class="logo">Doc<span>Chat</span></div>
+    <div class="hdiv"></div>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Zmień motyw">
+        <svg id="themeIcon" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+    </button>
     <div class="hdiv"></div>
     <span id="providerBadge" class="badge badge-anthropic">Anthropic</span>
 
@@ -443,6 +524,26 @@
     </section>
 </main>
 
+<!-- ════════════════ PDF PREVIEW MODAL ════════════════ -->
+<div class="modal-overlay hidden" id="previewModal" onclick="onModalOverlayClick(event)">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span class="modal-title" id="previewTitle"></span>
+            <div class="modal-nav">
+                <button id="prevBtn" onclick="previewPrevPage()" title="Poprzednia strona">&#8249;</button>
+                <span class="modal-page-info" id="pageInfo">1 / 1</span>
+                <button id="nextBtn" onclick="previewNextPage()" title="Następna strona">&#8250;</button>
+            </div>
+            <button class="modal-close" onclick="closePreview()" title="Zamknij">&#10005;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div class="modal-spinner" id="modalSpinner">
+                <div class="spinner"></div> Ładowanie…
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="toasts"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -508,6 +609,12 @@ let chunks      = [];
 let tfidf       = null;
 let chatHistory = [];
 let busy        = false;
+let fileStore   = {};
+
+// preview state
+let previewPdfDoc = null;
+let previewPage   = 1;
+let previewTotal  = 0;
 
 // ════════════════════════════════════════════
 // PROVIDER SWITCHING
@@ -604,6 +711,7 @@ async function handleFiles(files) {
             });
             const nc = splitChunks(text, file.name, chunks.length);
             chunks.push(...nc);
+            fileStore[file.name] = file;
             addFileRow(file.name, nc.length);
         } catch (e) {
             toast(`Błąd: ${file.name} – ${e.message}`, 'error');
@@ -898,19 +1006,21 @@ function addFileRow(name, count) {
     const empty = document.getElementById('fileEmpty');
     if (empty) empty.remove();
     const item = el('div', 'file-item');
+    item.title = 'Kliknij, aby podejrzeć PDF';
+    item.onclick = () => openPreview(name);
     item.innerHTML =
         `<svg class="file-pdf-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">` +
         `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>` +
         `<polyline points="14 2 14 8 20 8"/></svg>` +
         `<div class="file-info">` +
         `<div class="file-name" title="${esc(name)}">${esc(name)}</div>` +
-        `<div class="file-meta">${count} fragmentów</div></div>`;
+        `<div class="file-meta">${count} fragmentów · kliknij, aby podejrzeć</div></div>`;
     list.appendChild(item);
 }
 
 function clearDocs() {
     if (!chunks.length) return toast('Brak dokumentów', 'info');
-    chunks = []; tfidf = null;
+    chunks = []; tfidf = null; fileStore = {};
     document.getElementById('fileList').innerHTML =
         '<div class="file-empty" id="fileEmpty">Brak wgranych dokumentów</div>';
     setInputEnabled(false);
@@ -968,6 +1078,98 @@ function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 function autoResize(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }
 
 // ════════════════════════════════════════════
+// DARK MODE
+// ════════════════════════════════════════════
+const SUN_ICON =
+    '<circle cx="12" cy="12" r="5"/>' +
+    '<line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>' +
+    '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>' +
+    '<line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>' +
+    '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+const MOON_ICON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+
+function toggleTheme() {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    setTheme(dark ? 'light' : 'dark');
+}
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('themeIcon').innerHTML = theme === 'dark' ? SUN_ICON : MOON_ICON;
+    localStorage.setItem('docchat_theme', theme);
+}
+
+// ════════════════════════════════════════════
+// PDF PREVIEW
+// ════════════════════════════════════════════
+async function openPreview(name) {
+    const file = fileStore[name];
+    if (!file) return toast('Plik niedostępny', 'error');
+
+    document.getElementById('previewTitle').textContent = name;
+    document.getElementById('previewModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    const body = document.getElementById('modalBody');
+    body.innerHTML = '<div class="modal-spinner"><div class="spinner"></div> Ładowanie…</div>';
+
+    try {
+        const buf  = await file.arrayBuffer();
+        previewPdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+        previewTotal  = previewPdfDoc.numPages;
+        previewPage   = 1;
+        await renderPreviewPage(previewPage);
+    } catch (e) {
+        body.innerHTML = `<div class="modal-spinner" style="color:#f87171">Błąd: ${e.message}</div>`;
+    }
+}
+
+async function renderPreviewPage(n) {
+    const body = document.getElementById('modalBody');
+    body.innerHTML = '<div class="modal-spinner"><div class="spinner"></div> Renderowanie…</div>';
+
+    const page      = await previewPdfDoc.getPage(n);
+    const viewport  = page.getViewport({ scale: 1 });
+
+    const maxW  = body.clientWidth - 40;
+    const scale = Math.min(maxW / viewport.width, 2.5);
+    const vp    = page.getViewport({ scale });
+
+    const canvas  = document.createElement('canvas');
+    canvas.width  = vp.width;
+    canvas.height = vp.height;
+
+    body.innerHTML = '';
+    const wrap = el('div', 'modal-canvas-wrap');
+    wrap.appendChild(canvas);
+    body.appendChild(wrap);
+
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+
+    document.getElementById('pageInfo').textContent = `${n} / ${previewTotal}`;
+    document.getElementById('prevBtn').disabled = n <= 1;
+    document.getElementById('nextBtn').disabled = n >= previewTotal;
+}
+
+async function previewPrevPage() {
+    if (previewPage > 1) { previewPage--; await renderPreviewPage(previewPage); }
+}
+
+async function previewNextPage() {
+    if (previewPage < previewTotal) { previewPage++; await renderPreviewPage(previewPage); }
+}
+
+function closePreview() {
+    document.getElementById('previewModal').classList.add('hidden');
+    document.body.style.overflow = '';
+    previewPdfDoc = null;
+}
+
+function onModalOverlayClick(e) {
+    if (e.target === document.getElementById('previewModal')) closePreview();
+}
+
+// ════════════════════════════════════════════
 // EVENTS + INIT
 // ════════════════════════════════════════════
 const dropZone = document.getElementById('dropZone');
@@ -986,8 +1188,14 @@ document.getElementById('chatInput').addEventListener('keydown', e => {
 });
 document.getElementById('chatInput').addEventListener('input', function () { autoResize(this); });
 
-// Init — populate models and restore any saved key
+// Init — populate models, restore key, restore theme
 onProviderChange();
+setTheme(localStorage.getItem('docchat_theme') || 'light');
+
+// Close preview on Escape
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePreview();
+});
 </script>
 </body>
 </html>
