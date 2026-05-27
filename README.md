@@ -1,4 +1,4 @@
-# DocChat – RAG Chatbot
+# [DocChat – RAG Chatbot](https://dolildev.github.io/RAGchatbot/)
 
 A browser-based RAG (Retrieval-Augmented Generation) chatbot that lets you chat with PDF documents using your choice of AI provider — no backend required.
 
