@@ -446,10 +446,83 @@ details.sources summary:hover { color: var(--primary); }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-@media (max-width: 720px) {
+/* ── Tablet (≤ 900px) ── */
+@media (max-width: 900px) {
+    aside { min-width: 180px; max-width: 270px; }
+    .key-input { width: 170px; }
+    .msg-content { max-width: 80%; }
+}
+
+/* ── Mobile (≤ 680px) ── */
+@media (max-width: 680px) {
+    /* Header — two-row layout */
+    header {
+        height: auto;
+        min-height: 52px;
+        padding: 0.5rem 0.75rem;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        row-gap: 0.5rem;
+    }
+    .hdiv { display: none; }
+    #providerBadge { display: none; }
+    .theme-btn { margin-left: auto; }
+
+    /* API area — full-width second row */
+    .api-area {
+        width: 100%;
+        margin-left: 0;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
+    select.provider-sel,
+    select.model-sel { flex: 1; min-width: 0; font-size: 0.78rem; }
+    .key-dot { display: none; }
+    .key-wrapper { flex: 1; min-width: 0; }
+    .key-input { width: 100%; }
+    .btn { padding: 0.35rem 0.7rem; }
+
+    /* Main layout */
     main { flex-direction: column; }
-    aside { width: 100%; max-width: 100%; max-height: 250px; border-right: none; border-bottom: 1px solid var(--border); }
-    .key-input { width: 140px; }
-    header { padding: 0 0.7rem; gap: 0.35rem; height: auto; min-height: 56px; flex-wrap: wrap; padding: 0.5rem 0.7rem; }
-    .api-area { flex-wrap: wrap; gap: 0.3rem; }
+
+    /* Sidebar — compact strip at top */
+    aside {
+        width: 100%;
+        max-width: 100%;
+        min-width: unset;
+        max-height: 200px;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .upload-zone { margin: 0.55rem 0.65rem 0; padding: 0.85rem 0.75rem; }
+    .upload-zone p { font-size: 0.74rem; }
+    .sidebar-foot { padding: 0.5rem 0.65rem; }
+
+    /* Chat */
+    .chat-messages { padding: 0.75rem; gap: 0.7rem; }
+    .msg-content { max-width: 90%; }
+    .msg-bubble { font-size: 0.84rem; padding: 0.55rem 0.8rem; }
+    .chat-footer { padding: 0.45rem 0.75rem 0.6rem; }
+    .chat-input { font-size: 0.84rem; }
+    .send-btn { padding: 0.55rem 0.85rem; font-size: 0.84rem; }
+
+    /* Sources */
+    .source-text { max-height: 70px; }
+
+    /* PDF Modal — bottom sheet */
+    .modal-overlay { padding: 0; align-items: flex-end; backdrop-filter: none; }
+    .modal-box { width: 100%; max-height: 93vh; border-radius: 16px 16px 0 0; }
+    .modal-header { padding: 0.65rem 0.85rem; }
+    .modal-body { padding: 0.85rem; gap: 0.65rem; }
+    .source-panel { max-width: 100%; }
+    .source-panel-text { max-height: 120px; }
+}
+
+/* ── Small phones (≤ 400px) ── */
+@media (max-width: 400px) {
+    select.provider-sel, select.model-sel { font-size: 0.73rem; }
+    .btn { font-size: 0.75rem; }
+    .send-btn { padding: 0.55rem 0.65rem; }
+    .msg-avatar { width: 24px; height: 24px; font-size: 0.6rem; }
 }
