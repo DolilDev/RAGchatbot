@@ -600,15 +600,15 @@ const PROVIDERS = {
 const MAX_TOKENS  = 2048;
 const CHUNK_SIZE  = 600;
 const CHUNK_OVER  = 80;
-const TOP_K       = 6;
+const TOP_K       = 8;
 
 const SYSTEM_PROMPT =
     'Jesteś asystentem do analizy dokumentów. Działasz jak wyszukiwarka — wydobywasz informacje z tekstu, nie tworzysz ich.\n\n' +
     'BEZWZGLĘDNE ZASADY:\n' +
     '- Odpowiadasz TYLKO na podstawie fragmentów podanych poniżej w sekcji KONTEKST.\n' +
     '- ZAKAZ używania jakiejkolwiek wiedzy spoza dostarczonego kontekstu.\n' +
-    '- Jeśli odpowiedź nie wynika wprost z kontekstu — napisz TYLKO: "Nie znalazłem tej informacji w dostarczonych dokumentach." Nic więcej.\n' +
-    '- Nie domyślaj się, nie uzupełniaj, nie wnioskuj ponad to co jest napisane.\n' +
+    '- Jeśli odpowiedź nie wynika z kontekstu — napisz: "Nie znalazłem tej informacji w dostarczonych dokumentach." Jeśli jest częściowa — podaj co jest i zaznacz że reszty brak.\n' +
+    '- Nie domyślaj się ani nie uzupełniaj wiedzy spoza kontekstu.\n' +
     '- Cytuj dosłownie kluczowe fragmenty używając cudzysłowów.\n' +
     '- Podawaj konkretne liczby, daty i nazwy dokładnie tak jak są w tekście.';
 
@@ -835,12 +835,19 @@ function cosine(v1, v2) {
 
 function retrieve(query, k) {
     if (!tfidf || !chunks.length) return [];
-    const qv = makeQueryVec(query, tfidf.idf);
+    const qTokens = new Set(tokenize(query));
+    const qv      = makeQueryVec(query, tfidf.idf);
+
     return chunks
-        .map((c, i) => ({ c, score: cosine(qv, tfidf.vectors[i]) }))
+        .map((c, i) => {
+            let score = cosine(qv, tfidf.vectors[i]);
+            // bonus za dokładne wystąpienie słów z pytania w chunku
+            const cText = c.text.toLowerCase();
+            qTokens.forEach(t => { if (cText.includes(t)) score += 0.15; });
+            return { c, score };
+        })
         .sort((a, b) => b.score - a.score)
         .slice(0, k)
-        .filter(x => x.score > 0)
         .map(x => x.c);
 }
 
