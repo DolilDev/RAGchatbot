@@ -404,10 +404,43 @@
             display: flex; flex-direction: column; align-items: center;
             padding: 1.2rem; gap: 0.8rem;
         }
-        .modal-canvas-wrap { position: relative; }
+        .modal-canvas-wrap { position: relative; display: inline-block; }
         .modal-canvas-wrap canvas {
             display: block; max-width: 100%; border-radius: 3px;
             box-shadow: 0 2px 14px rgba(0,0,0,0.5);
+        }
+
+        /* text layer — transparent spans over the canvas */
+        .text-layer {
+            position: absolute; inset: 0;
+            overflow: hidden; line-height: 1;
+            pointer-events: none; user-select: none;
+        }
+        .text-layer span {
+            color: transparent; position: absolute;
+            white-space: pre; transform-origin: 0% 0%;
+            border-radius: 2px;
+        }
+        .text-layer span.hl {
+            background: rgba(255, 210, 0, 0.45);
+            mix-blend-mode: multiply;
+            outline: 1px solid rgba(255, 180, 0, 0.4);
+        }
+
+        /* source text panel under the canvas */
+        .source-panel {
+            width: 100%; max-width: 700px;
+            background: #1a1800; border: 2px solid rgba(255, 210, 0, 0.5);
+            border-radius: 8px; padding: 0.75rem 1rem;
+        }
+        .source-panel-label {
+            font-size: 0.65rem; font-weight: 700; letter-spacing: 0.07em;
+            text-transform: uppercase; color: rgba(255, 210, 0, 0.85);
+            margin-bottom: 0.45rem;
+        }
+        .source-panel-text {
+            font-size: 0.78rem; color: #e2e8f0; line-height: 1.65;
+            white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow-y: auto;
         }
         .modal-spinner {
             color: #bbb; font-size: 0.82rem; padding: 3rem 0;
@@ -625,9 +658,10 @@ let busy        = false;
 let fileStore   = {};
 
 // preview state
-let previewPdfDoc = null;
-let previewPage   = 1;
-let previewTotal  = 0;
+let previewPdfDoc     = null;
+let previewPage       = 1;
+let previewTotal      = 0;
+let previewSourceChunk = null;
 
 // ════════════════════════════════════════════
 // PROVIDER SWITCHING
@@ -1012,7 +1046,7 @@ function addMsg(role, text, sources = []) {
                 btn.className = 'page-link';
                 btn.textContent = `str. ${s.page} ↗`;
                 btn.title = `Otwórz PDF na stronie ${s.page}`;
-                btn.onclick = e => { e.stopPropagation(); openPreviewAtPage(s.source, s.page); };
+                btn.onclick = e => { e.stopPropagation(); openPreviewAtPage(s.source, s.page, s.text); };
                 meta.appendChild(btn);
             }
             const snip = el('div', 'source-text');
@@ -1144,10 +1178,11 @@ function setTheme(theme) {
 // ════════════════════════════════════════════
 // PDF PREVIEW
 // ════════════════════════════════════════════
-async function openPreview(name, startPage = 1) {
+async function openPreview(name, startPage = 1, chunkText = null) {
     const file = fileStore[name];
     if (!file) return toast('Plik niedostępny', 'error');
 
+    previewSourceChunk = chunkText;
     document.getElementById('previewTitle').textContent = name;
     document.getElementById('previewModal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -1166,12 +1201,13 @@ async function openPreview(name, startPage = 1) {
     }
 }
 
-async function openPreviewAtPage(name, page) {
+async function openPreviewAtPage(name, page, chunkText = null) {
+    previewSourceChunk = chunkText;
     if (previewPdfDoc && document.getElementById('previewTitle').textContent === name) {
         previewPage = Math.min(Math.max(page, 1), previewTotal);
         await renderPreviewPage(previewPage);
     } else {
-        await openPreview(name, page);
+        await openPreview(name, page, chunkText);
     }
 }
 
@@ -1179,12 +1215,11 @@ async function renderPreviewPage(n) {
     const body = document.getElementById('modalBody');
     body.innerHTML = '<div class="modal-spinner"><div class="spinner"></div> Renderowanie…</div>';
 
-    const page      = await previewPdfDoc.getPage(n);
-    const viewport  = page.getViewport({ scale: 1 });
-
-    const maxW  = body.clientWidth - 40;
-    const scale = Math.min(maxW / viewport.width, 2.5);
-    const vp    = page.getViewport({ scale });
+    const page     = await previewPdfDoc.getPage(n);
+    const viewport = page.getViewport({ scale: 1 });
+    const maxW     = body.clientWidth - 40;
+    const scale    = Math.min(maxW / viewport.width, 2.5);
+    const vp       = page.getViewport({ scale });
 
     const canvas  = document.createElement('canvas');
     canvas.width  = vp.width;
@@ -1197,9 +1232,47 @@ async function renderPreviewPage(n) {
 
     await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
 
+    // text layer + highlight
+    try {
+        const textContent   = await page.getTextContent();
+        const textLayerDiv  = document.createElement('div');
+        textLayerDiv.className = 'text-layer';
+        textLayerDiv.style.cssText = `width:${vp.width}px;height:${vp.height}px`;
+        wrap.appendChild(textLayerDiv);
+
+        await pdfjsLib.renderTextLayer({
+            textContent,
+            container: textLayerDiv,
+            viewport: vp,
+            textDivs: []
+        }).promise;
+
+        if (previewSourceChunk) highlightTextLayer(textLayerDiv, previewSourceChunk);
+    } catch (_) { /* text layer not critical */ }
+
+    // source panel below canvas
+    if (previewSourceChunk) {
+        const panel = el('div', 'source-panel');
+        const lbl   = el('div', 'source-panel-label');
+        lbl.textContent = 'Znaleziony fragment';
+        const txt = el('div', 'source-panel-text');
+        txt.textContent = previewSourceChunk;
+        panel.append(lbl, txt);
+        body.appendChild(panel);
+    }
+
     document.getElementById('pageInfo').textContent = `${n} / ${previewTotal}`;
     document.getElementById('prevBtn').disabled = n <= 1;
     document.getElementById('nextBtn').disabled = n >= previewTotal;
+}
+
+function highlightTextLayer(container, chunkText) {
+    const words = chunkText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    if (!words.length) return;
+    container.querySelectorAll('span').forEach(span => {
+        const t = span.textContent.toLowerCase();
+        if (words.some(w => t.includes(w))) span.classList.add('hl');
+    });
 }
 
 async function previewPrevPage() {
@@ -1213,7 +1286,8 @@ async function previewNextPage() {
 function closePreview() {
     document.getElementById('previewModal').classList.add('hidden');
     document.body.style.overflow = '';
-    previewPdfDoc = null;
+    previewPdfDoc      = null;
+    previewSourceChunk = null;
 }
 
 function onModalOverlayClick(e) {
